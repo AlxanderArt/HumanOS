@@ -1,4 +1,4 @@
-# HSOP — Human Signal Orchestration Platform
+# HumanOS — Human Signal Orchestration Platform
 
 Unified HITL orchestration platform for data labeling, vendor workforce management, agent evaluation, and quality intelligence.
 

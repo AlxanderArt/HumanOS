@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { handleCors, jsonResponse, errorResponse, parseJson } from "../_shared/cors.ts";
 import { createServiceClient, getAuthToken } from "../_shared/supabase.ts";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -8,23 +10,30 @@ serve(async (req) => {
 
   try {
     const authHeader = getAuthToken(req);
-    if (!authHeader) return errorResponse("Missing authorization", 401);
+    if (!authHeader) return errorResponse(req, "Missing authorization", 401);
 
-    const { task_id } = await req.json();
-    if (!task_id) return errorResponse("task_id is required");
+    let body: Record<string, unknown>;
+    try {
+      body = await parseJson(req);
+    } catch {
+      return errorResponse(req, "Invalid JSON in request body");
+    }
+
+    const { task_id } = body;
+    if (!task_id || typeof task_id !== "string" || !UUID_RE.test(task_id as string)) {
+      return errorResponse(req, "Valid task_id (UUID) is required");
+    }
 
     const serviceClient = createServiceClient();
 
-    // Get task with its latest annotation confidence
     const { data: task, error: taskError } = await serviceClient
       .from("tasks")
-      .select("*, projects(*)")
+      .select("id, tenant_id")
       .eq("id", task_id)
       .single();
 
-    if (taskError || !task) return errorResponse("Task not found", 404);
+    if (taskError || !task) return errorResponse(req, "Task not found", 404);
 
-    // Get latest annotation confidence
     const { data: annotations } = await serviceClient
       .from("annotations")
       .select("confidence")
@@ -34,9 +43,8 @@ serve(async (req) => {
 
     const latestConfidence = annotations?.[0]?.confidence ?? null;
 
-    // Routing logic
-    const HIGH_CONFIDENCE_THRESHOLD = 0.9;
-    const LOW_CONFIDENCE_THRESHOLD = 0.5;
+    const HIGH = 0.9;
+    const LOW = 0.5;
 
     let route: string;
     let newStatus: string;
@@ -46,11 +54,11 @@ serve(async (req) => {
       route = "human_review";
       newStatus = "in_review";
       reason = "No confidence score — requires human review";
-    } else if (latestConfidence >= HIGH_CONFIDENCE_THRESHOLD) {
+    } else if (latestConfidence >= HIGH) {
       route = "auto_accept";
       newStatus = "accepted";
       reason = `High confidence (${latestConfidence}) — auto-accepted`;
-    } else if (latestConfidence < LOW_CONFIDENCE_THRESHOLD) {
+    } else if (latestConfidence < LOW) {
       route = "escalate";
       newStatus = "escalated";
       reason = `Low confidence (${latestConfidence}) — escalated to specialist`;
@@ -60,13 +68,11 @@ serve(async (req) => {
       reason = `Medium confidence (${latestConfidence}) — routed to reviewer`;
     }
 
-    // Update task status
     await serviceClient
       .from("tasks")
       .update({ status: newStatus, confidence: latestConfidence })
       .eq("id", task_id);
 
-    // Log routing decision
     await serviceClient.from("event_log").insert({
       event_type: newStatus === "escalated" ? "task.escalated" : "task.completed",
       entity_type: "task",
@@ -75,14 +81,9 @@ serve(async (req) => {
       tenant_id: task.tenant_id,
     });
 
-    return jsonResponse({
-      task_id,
-      route,
-      new_status: newStatus,
-      confidence: latestConfidence,
-      reason,
-    });
+    return jsonResponse(req, { task_id, route, new_status: newStatus, confidence: latestConfidence, reason });
   } catch (err) {
-    return errorResponse(err.message, 500);
+    console.error("route-task error:", err);
+    return errorResponse(req, "Internal server error", 500);
   }
 });

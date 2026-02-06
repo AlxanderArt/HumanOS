@@ -5,10 +5,10 @@
   --color-foreground: #fafafa;
   --color-card: #111113;
   --color-card-foreground: #fafafa;
-  --color-border: #27272a;
+  --color-border: #303034;
   --color-muted: #18181b;
-  --color-muted-foreground: #a1a1aa;
-  --color-primary: #6366f1;
+  --color-muted-foreground: #b4b4bc;
+  --color-primary: #818cf8;
   --color-primary-foreground: #ffffff;
   --color-accent: #22d3ee;
   --color-accent-foreground: #0a0a0b;
@@ -30,4 +30,37 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.skip-link:focus {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,8 +1,8 @@
 asyncapi: 3.0.0
 info:
-  title: HSOP Event Platform
+  title: HumanOS Event Platform
   version: 1.0.0
-  description: Event catalog for the Human Signal Orchestration Platform
+  description: Event catalog for HumanOS — Human Signal Orchestration Platform
 
 servers:
   supabaseRealtime:

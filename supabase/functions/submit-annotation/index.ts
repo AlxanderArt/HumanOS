@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { handleCors, jsonResponse, errorResponse, parseJson } from "../_shared/cors.ts";
 import { createServiceClient, createUserClient, getAuthToken } from "../_shared/supabase.ts";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -8,38 +10,53 @@ serve(async (req) => {
 
   try {
     const authHeader = getAuthToken(req);
-    if (!authHeader) return errorResponse("Missing authorization", 401);
+    if (!authHeader) return errorResponse(req, "Missing authorization", 401);
 
-    const { task_id, labels, confidence, time_spent_ms } = await req.json();
-    if (!task_id || !labels) return errorResponse("task_id and labels are required");
+    let body: Record<string, unknown>;
+    try {
+      body = await parseJson(req);
+    } catch {
+      return errorResponse(req, "Invalid JSON in request body");
+    }
+
+    const { task_id, labels, confidence, time_spent_ms } = body;
+
+    if (!task_id || typeof task_id !== "string" || !UUID_RE.test(task_id as string)) {
+      return errorResponse(req, "Valid task_id (UUID) is required");
+    }
+    if (!labels || typeof labels !== "object") {
+      return errorResponse(req, "labels object is required");
+    }
+    if (confidence !== undefined && confidence !== null) {
+      const conf = Number(confidence);
+      if (isNaN(conf) || conf < 0 || conf > 1) {
+        return errorResponse(req, "confidence must be a number between 0 and 1");
+      }
+    }
 
     const userClient = createUserClient(authHeader);
     const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return errorResponse("Unauthorized", 401);
+    if (authError || !user) return errorResponse(req, "Unauthorized", 401);
 
     const serviceClient = createServiceClient();
 
-    // Verify the task exists and user is assigned
+    // Fetch task with all needed fields in one query
+    const { data: task } = await serviceClient
+      .from("tasks")
+      .select("id, is_gold, project_id, tenant_id")
+      .eq("id", task_id)
+      .single();
+
+    if (!task) return errorResponse(req, "Task not found", 404);
+
+    // Check assignment
     const { data: assignment } = await serviceClient
       .from("task_assignments")
-      .select("id, task_id")
+      .select("id")
       .eq("task_id", task_id)
       .eq("assignee_id", user.id)
       .eq("status", "assigned")
-      .single();
-
-    if (!assignment) {
-      // Check if task exists at all
-      const { data: task } = await serviceClient
-        .from("tasks")
-        .select("id, tenant_id")
-        .eq("id", task_id)
-        .single();
-
-      if (!task) return errorResponse("Task not found", 404);
-
-      // Allow submission without assignment for flexibility
-    }
+      .maybeSingle();
 
     // Create annotation
     const { data: annotation, error: annotationError } = await serviceClient
@@ -49,14 +66,17 @@ serve(async (req) => {
         annotator_id: user.id,
         labels,
         confidence: confidence ?? null,
-        time_spent_ms: time_spent_ms ?? 0,
+        time_spent_ms: Number(time_spent_ms) || 0,
       })
       .select()
       .single();
 
-    if (annotationError) return errorResponse(annotationError.message, 500);
+    if (annotationError) {
+      console.error("Annotation insert error:", annotationError);
+      return errorResponse(req, "Failed to create annotation", 500);
+    }
 
-    // Update assignment status
+    // Update assignment if exists
     if (assignment) {
       await serviceClient
         .from("task_assignments")
@@ -70,30 +90,18 @@ serve(async (req) => {
       .update({ status: "submitted" })
       .eq("id", task_id);
 
-    // Check if this was a gold set task
-    const { data: task } = await serviceClient
-      .from("tasks")
-      .select("is_gold, project_id, tenant_id")
-      .eq("id", task_id)
-      .single();
-
+    // Gold set check
     let goldResult = null;
-
-    if (task?.is_gold) {
-      // Find matching gold set and score
+    if (task.is_gold) {
       const { data: goldSet } = await serviceClient
         .from("gold_sets")
         .select("id, expected_labels")
         .eq("project_id", task.project_id)
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (goldSet) {
-        const expectedStr = JSON.stringify(goldSet.expected_labels);
-        const submittedStr = JSON.stringify(labels);
-        const score = expectedStr === submittedStr ? 1.0 : 0.3;
-        const passed = score >= 0.7;
-
+        const score = JSON.stringify(goldSet.expected_labels) === JSON.stringify(labels) ? 1.0 : 0.3;
         const { data: result } = await serviceClient
           .from("gold_set_results")
           .insert({
@@ -101,11 +109,10 @@ serve(async (req) => {
             annotator_id: user.id,
             submitted_labels: labels,
             score,
-            passed,
+            passed: score >= 0.7,
           })
           .select()
           .single();
-
         goldResult = result;
       }
     }
@@ -117,39 +124,33 @@ serve(async (req) => {
       entity_id: annotation.id,
       payload: { task_id, annotator_id: user.id, confidence },
       actor_id: user.id,
-      tenant_id: task?.tenant_id,
+      tenant_id: task.tenant_id,
     });
 
-    // Record cost if vendor workforce member
+    // Record cost — single join query
     const { data: workforce } = await serviceClient
       .from("workforce_members")
-      .select("vendor_id")
+      .select("vendor_id, vendors(cost_per_task)")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (workforce?.vendor_id) {
-      const { data: vendor } = await serviceClient
-        .from("vendors")
-        .select("cost_per_task")
-        .eq("id", workforce.vendor_id)
-        .single();
-
-      if (vendor?.cost_per_task) {
+      const vendor = Array.isArray(workforce.vendors) ? workforce.vendors[0] : workforce.vendors;
+      const costPerTask = (vendor as Record<string, unknown>)?.cost_per_task as number | null;
+      if (costPerTask) {
         await serviceClient.from("cost_ledger").insert({
-          tenant_id: task?.tenant_id,
+          tenant_id: task.tenant_id,
           task_id,
           vendor_id: workforce.vendor_id,
           annotator_id: user.id,
-          amount: vendor.cost_per_task,
+          amount: costPerTask,
         });
       }
     }
 
-    return jsonResponse({
-      annotation,
-      gold_result: goldResult,
-    });
+    return jsonResponse(req, { annotation, gold_result: goldResult });
   } catch (err) {
-    return errorResponse(err.message, 500);
+    console.error("submit-annotation error:", err);
+    return errorResponse(req, "Internal server error", 500);
   }
 });
