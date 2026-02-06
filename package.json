@@ -1,0 +1,25 @@
+{
+  "name": "human-signal-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified HITL orchestration platform for data labeling, vendor ops, agent evaluation, and quality intelligence",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "workers/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/dashboard",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "supabase functions deploy"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

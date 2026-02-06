@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  quality-scorer:
+    build: ./workers/quality-scorer
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  workflow-engine:
+    build: ./workers/workflow-engine
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:

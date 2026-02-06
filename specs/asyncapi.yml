@@ -1,0 +1,161 @@
+asyncapi: 3.0.0
+info:
+  title: HSOP Event Platform
+  version: 1.0.0
+  description: Event catalog for the Human Signal Orchestration Platform
+
+servers:
+  supabaseRealtime:
+    host: localhost:54321
+    protocol: wss
+    description: Supabase Realtime (pg_notify over WebSocket)
+
+channels:
+  task.created:
+    description: Fired when a new task is created
+    messages:
+      taskCreated:
+        $ref: "#/components/messages/TaskCreated"
+
+  task.assigned:
+    description: Fired when a task is assigned to an annotator
+    messages:
+      taskAssigned:
+        $ref: "#/components/messages/TaskAssigned"
+
+  task.escalated:
+    description: Fired when a task is escalated due to low confidence
+    messages:
+      taskEscalated:
+        $ref: "#/components/messages/TaskEscalated"
+
+  annotation.submitted:
+    description: Fired when an annotator submits labels
+    messages:
+      annotationSubmitted:
+        $ref: "#/components/messages/AnnotationSubmitted"
+
+  quality.computed:
+    description: Fired when quality metrics are calculated
+    messages:
+      qualityComputed:
+        $ref: "#/components/messages/QualityComputed"
+
+  consensus.reached:
+    description: Fired when annotator consensus is achieved
+    messages:
+      consensusReached:
+        $ref: "#/components/messages/ConsensusReached"
+
+  drift.detected:
+    description: Fired when label distribution drift is detected
+    messages:
+      driftDetected:
+        $ref: "#/components/messages/DriftDetected"
+
+  workflow.stage.advanced:
+    description: Fired when a workflow instance moves to the next stage
+    messages:
+      workflowAdvanced:
+        $ref: "#/components/messages/WorkflowAdvanced"
+
+  agent.trace.ingested:
+    description: Fired when an agent trajectory is stored
+    messages:
+      agentIngested:
+        $ref: "#/components/messages/AgentIngested"
+
+components:
+  messages:
+    TaskCreated:
+      contentType: application/json
+      payload:
+        type: object
+        required: [task_id, project_id, priority]
+        properties:
+          task_id: { type: string, format: uuid }
+          project_id: { type: string, format: uuid }
+          priority: { type: integer }
+
+    TaskAssigned:
+      contentType: application/json
+      payload:
+        type: object
+        required: [task_id, assignee_id]
+        properties:
+          task_id: { type: string, format: uuid }
+          assignee_id: { type: string, format: uuid }
+          vendor_id: { type: string, format: uuid, nullable: true }
+
+    TaskEscalated:
+      contentType: application/json
+      payload:
+        type: object
+        required: [task_id, reason]
+        properties:
+          task_id: { type: string, format: uuid }
+          reason: { type: string }
+          escalated_by: { type: string, format: uuid }
+
+    AnnotationSubmitted:
+      contentType: application/json
+      payload:
+        type: object
+        required: [annotation_id, task_id, annotator_id]
+        properties:
+          annotation_id: { type: string, format: uuid }
+          task_id: { type: string, format: uuid }
+          annotator_id: { type: string, format: uuid }
+          confidence: { type: number, minimum: 0, maximum: 1, nullable: true }
+
+    QualityComputed:
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          annotation_id: { type: string, format: uuid }
+          gold_score: { type: number, nullable: true }
+          consensus_score: { type: number, nullable: true }
+
+    ConsensusReached:
+      contentType: application/json
+      payload:
+        type: object
+        required: [task_id, agreement_score]
+        properties:
+          task_id: { type: string, format: uuid }
+          agreement_score: { type: number }
+          consensus_labels: { type: object }
+          annotator_count: { type: integer }
+
+    DriftDetected:
+      contentType: application/json
+      payload:
+        type: object
+        required: [project_id, drift_score, severity]
+        properties:
+          project_id: { type: string, format: uuid }
+          drift_score: { type: number }
+          severity: { type: string, enum: [low, medium, high, critical] }
+
+    WorkflowAdvanced:
+      contentType: application/json
+      payload:
+        type: object
+        required: [instance_id, task_id, from_stage, to_stage]
+        properties:
+          instance_id: { type: string, format: uuid }
+          task_id: { type: string, format: uuid }
+          from_stage: { type: integer }
+          to_stage: { type: integer }
+
+    AgentIngested:
+      contentType: application/json
+      payload:
+        type: object
+        required: [trace_id, agent_id, session_id]
+        properties:
+          trace_id: { type: string, format: uuid }
+          agent_id: { type: string }
+          session_id: { type: string }
+          step_count: { type: integer }
