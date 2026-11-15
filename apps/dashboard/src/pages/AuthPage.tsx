@@ -3,11 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 
-interface AuthPageProps {
-  redirectTo?: string;
-}
-
-export function AuthPage({ redirectTo }: AuthPageProps) {
+export function AuthPage() {
   const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");

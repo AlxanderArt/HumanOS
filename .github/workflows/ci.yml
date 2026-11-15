@@ -20,7 +20,7 @@ jobs:
       - run: npm install
 
       - name: Typecheck packages
-        run: npm run typecheck --workspaces --if-present
+        run: npm run typecheck
 
       - name: Build dashboard
         run: npm run build --workspace=apps/dashboard

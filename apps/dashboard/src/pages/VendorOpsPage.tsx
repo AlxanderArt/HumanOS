@@ -132,8 +132,8 @@ export function VendorOpsPage() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={v.status === "active" ? "success" : "warning"}>{v.status as string}</Badge>
-                      {v.sla_target && (
-                        <Badge variant="outline" className="hidden sm:inline-flex">SLA: {formatPercent(v.sla_target as number)}</Badge>
+                      {typeof v.sla_target === "number" && (
+                        <Badge variant="outline" className="hidden sm:inline-flex">SLA: {formatPercent(v.sla_target)}</Badge>
                       )}
                     </div>
                   </div>

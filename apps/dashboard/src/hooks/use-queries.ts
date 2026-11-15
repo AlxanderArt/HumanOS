@@ -185,10 +185,9 @@ export function useNextTask() {
         .select("id, payload, priority, projects(name, task_schema, labeling_instructions)")
         .eq("status", "pending")
         .order("priority", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
       if (tenantId) query.eq("tenant_id", tenantId);
-      const { data, error } = await query;
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data;
     },

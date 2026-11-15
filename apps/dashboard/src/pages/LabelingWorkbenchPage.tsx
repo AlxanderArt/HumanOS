@@ -20,7 +20,7 @@ export function LabelingWorkbenchPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [startTime, setStartTime] = useState(Date.now());
+  const [startTime, setStartTime] = useState(0);
 
   const loadNextTask = useCallback(async () => {
     setLoading(true);
@@ -31,11 +31,10 @@ export function LabelingWorkbenchPage() {
       .select("id, payload, priority, projects(name, task_schema, labeling_instructions)")
       .eq("status", "pending")
       .order("priority", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
 
     if (tenantId) query.eq("tenant_id", tenantId);
-    const { data, error: fetchError } = await query;
+    const { data, error: fetchError } = await query.maybeSingle();
 
     if (fetchError) {
       setError("Failed to load task. Please try again.");
@@ -60,25 +59,11 @@ export function LabelingWorkbenchPage() {
   }, [tenantId]);
 
   useEffect(() => {
-    loadNextTask();
+    const timer = window.setTimeout(() => {
+      void loadNextTask();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadNextTask]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "Enter" && !e.shiftKey && task && !submitting) {
-        e.preventDefault();
-        handleSubmit();
-      }
-      if (e.key === "s" && !e.ctrlKey && !e.metaKey && task) {
-        e.preventDefault();
-        loadNextTask();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
 
   async function handleSubmit() {
     if (!task || submitting) return;
@@ -102,6 +87,23 @@ export function LabelingWorkbenchPage() {
     setSubmitting(false);
     loadNextTask();
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "Enter" && !e.shiftKey && task && !submitting) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      if (e.key === "s" && !e.ctrlKey && !e.metaKey && task) {
+        e.preventDefault();
+        loadNextTask();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   async function handleFlag() {
     if (!task) return;

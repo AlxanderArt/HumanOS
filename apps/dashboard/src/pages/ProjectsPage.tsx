@@ -96,9 +96,9 @@ export function ProjectsPage() {
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-semibold">{project.name as string}</h3>
-                      {project.description && (
+                      {typeof project.description === "string" && project.description.length > 0 && (
                         <p className="mt-1 text-sm text-[var(--color-muted-foreground)] line-clamp-2">
-                          {project.description as string}
+                          {project.description}
                         </p>
                       )}
                     </div>

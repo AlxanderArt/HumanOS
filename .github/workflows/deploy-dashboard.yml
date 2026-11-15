@@ -1,4 +1,4 @@
-name: Deploy Dashboard
+name: Build Dashboard
 
 on:
   push:
@@ -20,9 +20,6 @@ jobs:
       - run: npm install
 
       - run: npm run build --workspace=apps/dashboard
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      # Deploy step depends on hosting provider (Vercel, Netlify, Supabase Hosting, etc.)
-      # Add deployment action here
+      # Deployment is intentionally separate until a hosting provider and
+      # environment-specific runtime configuration are selected.
