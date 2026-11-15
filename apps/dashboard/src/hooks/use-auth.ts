@@ -38,7 +38,7 @@ export function useAuth() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error };
-    } catch (err) {
+    } catch {
       return { error: { message: "Network error. Check your connection." } as AuthError };
     }
   }, []);
@@ -51,7 +51,7 @@ export function useAuth() {
         options: { data: { display_name: displayName } },
       });
       return { error };
-    } catch (err) {
+    } catch {
       return { error: { message: "Network error. Check your connection." } as AuthError };
     }
   }, []);
@@ -65,7 +65,7 @@ export function useAuth() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       return { error };
-    } catch (err) {
+    } catch {
       return { error: { message: "Network error. Check your connection." } as AuthError };
     }
   }, []);

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useTenantQuery, TenantCtx } from "@/hooks/use-tenant";
@@ -31,7 +31,6 @@ const queryClient = new QueryClient({
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) {
     return (
@@ -49,7 +48,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <AuthPage redirectTo={location.pathname !== "/" ? location.pathname : undefined} />;
+    return <AuthPage />;
   }
 
   return <>{children}</>;
